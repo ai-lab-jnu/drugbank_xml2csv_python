@@ -1,18 +1,43 @@
+#-*- coding: utf-8 -*- 
+
 from lxml import etree
-from StringIO import StringIO
+import xml.etree.ElementTree as ET
+#from StringIO import StringIO      # Python 2
+#from io import StringIO            # Python 3
+from tqdm import tqdm
 from collections import defaultdict
 import csv
+import sys
 
-# Parse XML
-f = open('drugbank.xml','r')
-data = f.read()
-f.close()
+is_python3 = sys.version_info.major == 3
+if is_python3:
+    unicode = str
 
-tree = etree.parse(StringIO(data))
-context = etree.iterparse(StringIO(data))
+try:
+    # Parse XML
+    #f = open('drugbank_full_db.xml', 'r', encoding="utf-8")
+    #data = f.read()
+    #f.close()
 
-root = tree.getroot()
-# print len(root), 'drugs'
+    # parser = etree.XMLParser(remove_blank_text=True, recover=True, encoding='utf-8')
+    #xml = bytes(bytearray(data, encoding='utf-8'))
+    #tree = etree.parse(xml, parser)
+
+    parser = ET.XMLParser(encoding="utf-8")
+
+    # 파일 위치 지정
+    tree = ET.parse('drugbank_full_db.xml', parser=parser)
+    #context = etree.iterparse(StringIO(data))
+
+    root = tree.getroot()
+except OSError as err:
+    print("OS error: {0}".format(err))
+except Exception as inst:
+    print(type(inst))    # the exception instance
+    print(inst.args)     # arguments stored in .args
+    print(inst)          # __str__ allows args to be printed directly,
+
+print (len(root), 'drugs')
 
 
 #######################################################################
@@ -27,7 +52,7 @@ transporter2attrib = defaultdict(dict)
 
 tag_prefix = '{http://www.drugbank.ca}'
 
-for child in root:
+for child in tqdm(root):
     for s in child.findall(tag_prefix+'drugbank-id'):
         if 'primary' in s.attrib:
             drugbank_id = s.text
@@ -206,34 +231,34 @@ for child in root:
         #print transporter_id, transporter_gene, transporter_name, transporter_organism, transporter_taxonomy_id, transporter_actions
 
 
-    print drugbank_id, drugname, drug_type, groups,
-    print 'targets:', len(drug2attrib[drugbank_id]['targets']),
-    print 'enzymes:', len(drug2attrib[drugbank_id]['enzymes']),
-    print 'transporters:', len(drug2attrib[drugbank_id]['transporters'])
+    #print (drugbank_id, drugname, drug_type, groups,)
+    #print ('targets:', len(drug2attrib[drugbank_id]['targets']),)
+    #print ('enzymes:', len(drug2attrib[drugbank_id]['enzymes']),)
+    #print ('transporters:', len(drug2attrib[drugbank_id]['transporters']))
 
-print '\n'
+print ('\n')
 
 
 #######################################################################
 # List of drugs to save (as long as num_targets + num_enzymes + num_transporters != 0)
 drugs = []
-for drugbank_id in sorted(drug2attrib.keys()):
+for drugbank_id in tqdm(sorted(drug2attrib.keys())):
     if len(drug2attrib[drugbank_id]['targets']) == 0 and len(drug2attrib[drugbank_id]['enzymes']) == 0 and len(drug2attrib[drugbank_id]['transporters']) == 0:
         continue
     else:
         drugs.append(drugbank_id)
         
-print len(drug2attrib), "drugs parsed from XML"
-print len(drugs), "drugs with at least 1 target/ enzyme/ transporter"
+print (len(drug2attrib), "drugs parsed from XML")
+print (len(drugs), "drugs with at least 1 target/ enzyme/ transporter")
 
 
 #######################################################################
 # Save drug attributes to CSV {'drugname', 'drug_type', 'groups', 'targets/enzymes/transporters': [_id, _actions]}
-outf = open('drugbank05_drugs.csv', 'w')
+outf = open('drugbank05_drugs.csv', 'w', newline='', encoding="utf-8")
 writer = csv.writer(outf)
 writer.writerow(['drugbank_id', 'drugname', 'drug_type', 'approved', 'experimental', 'illicit', 'investigational', 'nutraceutical', 'withdrawn'])
 
-for drugbank_id in drugs:
+for drugbank_id in tqdm(drugs):
     drugname = drug2attrib[drugbank_id]['drugname']
     if isinstance(drugname, unicode):
         if u'\u03b2' in drugname:
@@ -254,8 +279,8 @@ outf.close()
 
 # drugbank_target_id -> #{'gene', 'name', 'organism', 'taxonomy_id', 'uniprot_id', 'genbank_gene_id', 'genbank_protein_id', 'hgnc_id'}
 
-outf = open('drugbank05_partner_protein.csv', 'w')
-outfh = open('drugbank05_partner_protein_human.csv', 'w')
+outf = open('drugbank05_partner_protein.csv', 'w', newline='', encoding="utf-8")
+outfh = open('drugbank05_partner_protein_human.csv', 'w', newline='', encoding="utf-8")
 writer = csv.writer(outf)
 writerh = csv.writer(outfh)
 
@@ -265,7 +290,7 @@ writerh.writerow(['partner_id', 'partner_name', 'gene_name', 'uniprot_id', 'genb
 partners_written = set()
 
 # Targets
-for partner_id in sorted(target2attrib.keys()):
+for partner_id in tqdm(sorted(target2attrib.keys())):
     if partner_id in partners_written:
         # print partner_id, target2attrib[partner_id]['gene'], 'already recorded'
         continue
@@ -288,11 +313,11 @@ for partner_id in sorted(target2attrib.keys()):
         writerh.writerow([partner_id, partner_name, gene_name, uniprot_id, genbank_gene_id, genbank_protein_id, hgnc_id, organism, taxonomy_id])
     
     if taxonomy_id == '9606' and organism.lower() != 'human':
-        print partner_id, target2attrib[partner_id]['gene'], organism, taxonomy_id, 'organism mismatch'
+        print (partner_id, target2attrib[partner_id]['gene'], organism, taxonomy_id, 'organism mismatch')
         
         
 # enzymes
-for partner_id in sorted(enzyme2attrib.keys()):
+for partner_id in tqdm(sorted(enzyme2attrib.keys())):
     if partner_id in partners_written:
         # print partner_id, enzyme2attrib[partner_id]['gene'], 'already recorded in targets'
         continue
@@ -315,11 +340,11 @@ for partner_id in sorted(enzyme2attrib.keys()):
         writerh.writerow([partner_id, partner_name, gene_name, uniprot_id, genbank_gene_id, genbank_protein_id, hgnc_id, organism, taxonomy_id])
     
     if taxonomy_id == '9606' and organism.lower() != 'human':
-        print partner_id, enzyme2attrib[partner_id]['gene'], organism, taxonomy_id, 'organism mismatch'
+        print (partner_id, enzyme2attrib[partner_id]['gene'], organism, taxonomy_id, 'organism mismatch')
         
         
 # transporters
-for partner_id in sorted(transporter2attrib.keys()):
+for partner_id in tqdm(sorted(transporter2attrib.keys())):
     if partner_id in partners_written:
         # print partner_id, transporter2attrib[partner_id]['gene'], 'already recorded in targets and/or enzymes'
         continue
@@ -342,7 +367,7 @@ for partner_id in sorted(transporter2attrib.keys()):
         writerh.writerow([partner_id, partner_name, gene_name, uniprot_id, genbank_gene_id, genbank_protein_id, hgnc_id, organism, taxonomy_id])
     
     if taxonomy_id == '9606' and organism.lower() != 'human':
-        print partner_id, transporter2attrib[partner_id]['gene'], organism, taxonomy_id, 'organism mismatch'
+        print (partner_id, transporter2attrib[partner_id]['gene'], organism, taxonomy_id, 'organism mismatch')
         
 outf.close()
 outfh.close()
@@ -356,8 +381,8 @@ outfh.close()
 # transporter [('substrate', 790), ('inducer', 100), ('inhibitor', 1075)]
 
 # Targets
-outf = open('drugbank05_drug2target.csv', 'w')
-outfh = open('drugbank05_drug2target_human.csv', 'w')
+outf = open('drugbank05_drug2target.csv', 'w', newline='', encoding="utf-8")
+outfh = open('drugbank05_drug2target_human.csv', 'w', newline='', encoding="utf-8")
 writer = csv.writer(outf)
 writerh = csv.writer(outfh)
 
@@ -379,8 +404,8 @@ outfh.close()
 
 
 # Enzymes
-outf = open('drugbank05_drug2enzyme.csv', 'w')
-outfh = open('drugbank05_drug2enzyme_human.csv', 'w')
+outf = open('drugbank05_drug2enzyme.csv', 'w', newline='', encoding="utf-8")
+outfh = open('drugbank05_drug2enzyme_human.csv', 'w', newline='', encoding="utf-8")
 writer = csv.writer(outf)
 writerh = csv.writer(outfh)
 
@@ -402,8 +427,8 @@ outfh.close()
 
 
 # Transporters
-outf = open('drugbank05_drug2transporter.csv', 'w')
-outfh = open('drugbank05_drug2transporter_human.csv', 'w')
+outf = open('drugbank05_drug2transporter.csv', 'w', newline='', encoding="utf-8")
+outfh = open('drugbank05_drug2transporter_human.csv', 'w', newline='', encoding="utf-8")
 writer = csv.writer(outf)
 writerh = csv.writer(outfh)
 
